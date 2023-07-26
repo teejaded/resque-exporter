@@ -1,6 +1,6 @@
 # Resque Exporter
 
-Prometheus exporter for Resque metrics.
+Prometheus exporter for Resque metrics. Forked from upstream to maintain and package ourselves for our monitoring v2.
 
 ## Usage
 
@@ -56,12 +56,12 @@ You can deploy the resque exporter using the [zappi/resque-exporter](https://hub
 | resque\_workers\_per\_queue | Number of workers handling a specific queue. | queue |
 | resque\_working\_workers | Number of working workers. | |
 
-## Development
-
 ### Building
+Tested is only building directly via go build. Make sure you have a running go environment.
 
-    make
-
-### Building Docker image
-
-    make docker
+```
+go mod init github.com/basecamp/resque-exporter/v2
+go mod tidy
+go get github.com/basecamp/resque-exporter/v2
+go build
+```
