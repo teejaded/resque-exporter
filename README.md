@@ -65,3 +65,9 @@ go mod tidy
 go get github.com/basecamp/resque-exporter/v2
 go build
 ```
+
+Building the docker image:
+
+```
+docker build -t resque-exporter:0.3.0 .
+```
