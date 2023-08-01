@@ -11,9 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kit/log/level"
 	"github.com/go-redis/redis"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
 )
 
@@ -22,6 +24,8 @@ const (
 )
 
 var (
+	logger = promlog.New(&promlog.Config{})
+
 	redisNamespace = flag.String(
 		"redis.namespace",
 		"resque",
@@ -183,7 +187,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	if err := e.scrape(ch); err != nil {
 		e.failedScrapes.Inc()
-		log.Error(err)
+		level.Error(logger).Log("msg", err)
 		ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 0)
 	} else {
 		ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 1)
@@ -323,8 +327,8 @@ func main() {
 		return
 	}
 
-	log.Infoln("Starting resque-exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
+	level.Info(logger).Log("msg", "Starting resque-exporter", "version", version.Info())
+	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 
 	if u := os.Getenv("REDIS_URL"); len(u) > 0 {
 		*redisURL = u
@@ -332,11 +336,12 @@ func main() {
 
 	exporter, err := NewExporter(*redisURL, *redisNamespace)
 	if err != nil {
-		log.Fatal(err)
+		level.Error(logger).Log("msg", err)
+		os.Exit(1)
 	}
 	prometheus.MustRegister(exporter)
 
-	http.Handle(*metricPath, prometheus.Handler())
+	http.Handle(*metricPath, promhttp.Handler())
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
 <head><title>Resque Exporter</title></head>
@@ -348,6 +353,9 @@ func main() {
 `))
 	})
 
-	log.Infoln("Listening on", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
+	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
+	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		level.Error(logger).Log("msg", err)
+		os.Exit(1)
+	}
 }
