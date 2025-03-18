@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: resque-exporter
+  name: resque-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: resque-exporter
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: resque-exporter
+        allow-kafka: "true"
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9447"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+      - image: us.icr.io/aoc-images/resque-exporter:latest
+        imagePullPolicy: Always
+        name: resque-exporter
+        command:
+          - sh
+          - -c
+          - /app/resque-exporter -redis.url $RESQUE_REDIS
+        env:
+          - name: RESQUE_REDIS
+            valueFrom:
+              configMapKeyRef:
+                name: f4-back-end-env
+                key: RESQUE_REDIS
+        ports:
+          - name: metrics
+            protocol: TCP
+            containerPort: 9447
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+      imagePullSecrets:
+        - name: us.icr.io
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532

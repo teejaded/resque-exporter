@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-kit/log/level"
 	"github.com/go-redis/redis"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/version"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	logger = promlog.New(&promlog.Config{})
+	logger *zap.SugaredLogger
 
 	redisNamespace = flag.String(
 		"redis.namespace",
@@ -187,7 +187,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	if err := e.scrape(ch); err != nil {
 		e.failedScrapes.Inc()
-		level.Error(logger).Log("msg", err)
+		logger.Error(err)
 		ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 0)
 	} else {
 		ch <- prometheus.MustNewConstMetric(upDesc, prometheus.GaugeValue, 1)
@@ -320,6 +320,10 @@ func init() {
 }
 
 func main() {
+	zapLogger, _ := zap.NewProduction()
+	defer zapLogger.Sync() // flushes buffer, if any
+	logger = zapLogger.Sugar()
+
 	flag.Parse()
 
 	if *printVersion {
@@ -327,8 +331,8 @@ func main() {
 		return
 	}
 
-	level.Info(logger).Log("msg", "Starting resque-exporter", "version", version.Info())
-	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
+	logger.Infow("Starting resque-exporter", "version", version.Info())
+	logger.Infow("Build context", "build_context", version.BuildContext())
 
 	if u := os.Getenv("REDIS_URL"); len(u) > 0 {
 		*redisURL = u
@@ -336,7 +340,7 @@ func main() {
 
 	exporter, err := NewExporter(*redisURL, *redisNamespace)
 	if err != nil {
-		level.Error(logger).Log("msg", err)
+		logger.Error(err)
 		os.Exit(1)
 	}
 	prometheus.MustRegister(exporter)
@@ -353,9 +357,9 @@ func main() {
 `))
 	})
 
-	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
+	logger.Infow("Listening on", "address", *listenAddress)
 	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
-		level.Error(logger).Log("msg", err)
+		logger.Error(err)
 		os.Exit(1)
 	}
 }
